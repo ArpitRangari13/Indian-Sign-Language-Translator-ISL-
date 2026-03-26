@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SIH Local ISL Translator</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; margin-top: 20px; }
+        
+        /* The Status Light Styling */
+        #status-light {
+            width: 40px; height: 40px; border-radius: 50%; background: #ddd;
+            margin: 10px auto; border: 3px solid #999; transition: 0.3s;
+        }
+        .active-light { background: #28a745 !important; box-shadow: 0 0 20px #28a745; border-color: #fff; }
+        
+        /* Main output text */
+        #main-result { font-size: 2.5rem; color: #007bff; font-weight: bold; margin: 15px 0; }
+        
+        /* The raw data containers */
+        #webcam-container { margin-bottom: 10px; }
+        #label-container div { font-family: monospace; color: #555; }
+        button { padding: 10px 20px; font-size: 1.2rem; cursor: pointer; background: #333; color: white; border: none; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+    <div><h2>Teachable Machine: ISL Translator</h2></div>
+    <button type="button" onclick="init()">Start Camera</button>
+    
+    <div id="status-light"></div>
+    <div id="main-result">Press Start...</div>
+    
+    <div id="webcam-container"></div>
+    <div id="label-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <script type="text/javascript">
+        // Your local model path
+        const URL = "./my_model/";
+
+        let model, webcam, labelContainer, maxPredictions;
+        let lastSpoken = ""; // variable to track what was just spoken
+
+        async function init() {
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+
+            const flip = true; 
+            webcam = new tmImage.Webcam(300, 300, flip); // Made camera slightly larger (300px)
+            await webcam.setup(); 
+            await webcam.play();
+            window.requestAnimationFrame(loop);
+
+            document.getElementById("webcam-container").appendChild(webcam.canvas);
+            labelContainer = document.getElementById("label-container");
+            
+            // Clear previous labels if clicking start multiple times
+            labelContainer.innerHTML = ""; 
+            for (let i = 0; i < maxPredictions; i++) { 
+                labelContainer.appendChild(document.createElement("div"));
+            }
+        }
+
+        async function loop() {
+            webcam.update(); 
+            await predict();
+            window.requestAnimationFrame(loop);
+        }
+
+        async function predict() {
+            const prediction = await model.predict(webcam.canvas);
+            
+            let highestProb = 0;
+            let bestClass = "";
+
+            // 1. Loop through all predictions to update raw text AND find the best match
+            for (let i = 0; i < maxPredictions; i++) {
+                const classPrediction = prediction[i].className + ": " + prediction[i].probability.toFixed(2);
+                labelContainer.childNodes[i].innerHTML = classPrediction;
+
+                if (prediction[i].probability > highestProb) {
+                    highestProb = prediction[i].probability;
+                    bestClass = prediction[i].className;
+                }
+            }
+
+            // 2. Control the Voice and Light based on the best match
+            const light = document.getElementById("status-light");
+            const mainResult = document.getElementById("main-result");
+
+            // Only trigger if confidence is over 90%
+            if (highestProb > 0.90 && bestClass !== "Background") {
+                mainResult.innerHTML = bestClass;
+                light.classList.add("active-light"); // Turn on the green light
+
+                // If it is Namaste (or any other sign), and we haven't spoken it yet
+                if (bestClass !== lastSpoken) {
+                    speak(bestClass);
+                    lastSpoken = bestClass; // Lock it so it doesn't repeat
+                }
+            } 
+            // Reset when nothing is happening (Background class)
+            else if (bestClass === "Background" || highestProb < 0.60) {
+                mainResult.innerHTML = "Waiting for sign...";
+                light.classList.remove("active-light"); // Turn off the light
+                lastSpoken = ""; // Reset the lock so you can do Namaste again!
+            }
+        }
+
+        // 3. The Speech Synthesis Function
+        function speak(text) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'hi-IN'; // Uses Indian/Hindi accent
+            window.speechSynthesis.speak(utterance);
+        }
+    </script>
+</body>
+</html>
