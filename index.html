@@ -2,47 +2,166 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>SIH Local ISL Translator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swar: AI Sign Language Assistant</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
+    
     <style>
-        body { font-family: sans-serif; text-align: center; margin-top: 20px; }
-        
-        /* The Status Light Styling */
-        #status-light {
-            width: 40px; height: 40px; border-radius: 50%; background: #ddd;
-            margin: 10px auto; border: 3px solid #999; transition: 0.3s;
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: rgba(30, 41, 59, 0.7);
+            --accent: #38bdf8;
+            --success: #10b981;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
         }
-        .active-light { background: #28a745 !important; box-shadow: 0 0 20px #28a745; border-color: #fff; }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(circle at top right, #1e293b, transparent 40%);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        header { text-align: center; margin-bottom: 30px; }
+        h1 { margin: 0; font-size: 2.5rem; font-weight: 800; color: var(--accent); letter-spacing: 1px; }
+        p.subtitle { color: var(--text-muted); margin-top: 5px; font-size: 1.1rem; }
+
+        .dashboard {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 30px;
+            max-width: 1000px;
+            width: 100%;
+            justify-content: center;
+        }
+
+        /* Glassmorphism Panels */
+        .panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        /* Camera Section */
+        .camera-section { flex: 1; min-width: 320px; display: flex; flex-direction: column; align-items: center; }
         
-        /* Main output text */
-        #main-result { font-size: 2.5rem; color: #007bff; font-weight: bold; margin: 15px 0; }
+        #webcam-container {
+            width: 100%;
+            max-width: 350px;
+            aspect-ratio: 1/1;
+            background: #000;
+            border-radius: 15px;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 3px solid rgba(255,255,255,0.1);
+            position: relative;
+        }
         
-        /* The raw data containers */
-        #webcam-container { margin-bottom: 10px; }
-        #label-container div { font-family: monospace; color: #555; }
-        button { padding: 10px 20px; font-size: 1.2rem; cursor: pointer; background: #333; color: white; border: none; border-radius: 5px; }
+        #webcam-container canvas { width: 100% !important; height: 100% !important; object-fit: cover; }
+
+        .btn-start {
+            background: linear-gradient(135deg, #38bdf8, #2563eb);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            border-radius: 50px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-family: inherit;
+        }
+        .btn-start:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(56, 189, 248, 0.4); }
+
+        /* Results Section */
+        .results-section { flex: 1; min-width: 320px; display: flex; flex-direction: column; justify-content: space-between; }
+        
+        .status-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+        
+        .live-badge {
+            display: flex; align-items: center; gap: 8px;
+            background: rgba(255,255,255,0.1); padding: 5px 15px; border-radius: 20px; font-size: 0.9rem;
+        }
+        .dot { width: 10px; height: 10px; border-radius: 50%; background: #ef4444; }
+        .dot.active { background: var(--success); box-shadow: 0 0 10px var(--success); animation: pulse 1.5s infinite; }
+
+        @keyframes pulse { 0% { transform: scale(0.95); opacity: 0.8; } 50% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(0.95); opacity: 0.8; } }
+
+        #main-result {
+            font-size: 3rem; font-weight: 800; color: var(--success); text-align: center;
+            margin: 20px 0; min-height: 70px; text-transform: uppercase;
+        }
+
+        /* Animated Progress Bars */
+        .bars-container { width: 100%; margin-top: auto; }
+        .bar-row { margin-bottom: 15px; }
+        .bar-label { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 5px; color: var(--text-muted); }
+        .bar-track { width: 100%; height: 10px; background: rgba(0,0,0,0.3); border-radius: 5px; overflow: hidden; }
+        .bar-fill { height: 100%; width: 0%; background: var(--accent); border-radius: 5px; transition: width 0.2s ease-out; }
+        
     </style>
 </head>
 <body>
 
-    <div><h2>Teachable Machine: ISL Translator</h2></div>
-    <button type="button" onclick="init()">Start Camera</button>
-    
-    <div id="status-light"></div>
-    <div id="main-result">Press Start...</div>
-    
-    <div id="webcam-container"></div>
-    <div id="label-container"></div>
+    <header>
+        <h1>Swar 🤟</h1>
+        <p class="subtitle">AI Sign Language Voice Assistant</p>
+    </header>
+
+    <div class="dashboard">
+        <div class="panel camera-section">
+            <div id="webcam-container">
+                <span id="cam-placeholder" style="color: #64748b;">Camera Offline</span>
+            </div>
+            <button class="btn-start" id="start-btn" onclick="init()">🚀 Start Translator</button>
+        </div>
+
+        <div class="panel results-section">
+            <div class="status-header">
+                <h3 style="margin: 0; color: #fff;">Live Translation</h3>
+                <div class="live-badge">
+                    <div class="dot" id="status-dot"></div>
+                    <span id="status-text">Standby</span>
+                </div>
+            </div>
+
+            <div id="main-result">---</div>
+
+            <div class="bars-container" id="bars-container">
+                </div>
+        </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    
     <script type="text/javascript">
-        // Your local model path
         const URL = "./my_model/";
 
-        let model, webcam, labelContainer, maxPredictions;
-        let lastSpoken = ""; // variable to track what was just spoken
+        let model, webcam, maxPredictions;
+        let lastSpoken = "";
+        let isRunning = false;
 
         async function init() {
+            if(isRunning) return; // Prevent multiple clicks
+            
+            const btn = document.getElementById("start-btn");
+            btn.innerText = "Loading AI...";
+            btn.style.opacity = "0.7";
+
             const modelURL = URL + "model.json";
             const metadataURL = URL + "metadata.json";
 
@@ -50,18 +169,38 @@
             maxPredictions = model.getTotalClasses();
 
             const flip = true; 
-            webcam = new tmImage.Webcam(300, 300, flip); // Made camera slightly larger (300px)
+            webcam = new tmImage.Webcam(400, 400, flip); 
             await webcam.setup(); 
             await webcam.play();
+            
+            isRunning = true;
             window.requestAnimationFrame(loop);
 
+            // UI Updates after load
+            document.getElementById("cam-placeholder").style.display = "none";
             document.getElementById("webcam-container").appendChild(webcam.canvas);
-            labelContainer = document.getElementById("label-container");
+            btn.style.display = "none";
             
-            // Clear previous labels if clicking start multiple times
-            labelContainer.innerHTML = ""; 
-            for (let i = 0; i < maxPredictions; i++) { 
-                labelContainer.appendChild(document.createElement("div"));
+            document.getElementById("status-dot").classList.add("active");
+            document.getElementById("status-text").innerText = "Listening...";
+
+            // Setup the dynamic progress bars
+            const barsContainer = document.getElementById("bars-container");
+            barsContainer.innerHTML = ""; // Clear existing
+            
+            for (let i = 0; i < maxPredictions; i++) {
+                const className = model.getClassLabels()[i];
+                barsContainer.innerHTML += `
+                    <div class="bar-row">
+                        <div class="bar-label">
+                            <span>${className}</span>
+                            <span id="pct-${i}">0%</span>
+                        </div>
+                        <div class="bar-track">
+                            <div class="bar-fill" id="fill-${i}"></div>
+                        </div>
+                    </div>
+                `;
             }
         }
 
@@ -77,44 +216,54 @@
             let highestProb = 0;
             let bestClass = "";
 
-            // 1. Loop through all predictions to update raw text AND find the best match
+            // Update Progress Bars dynamically
             for (let i = 0; i < maxPredictions; i++) {
-                const classPrediction = prediction[i].className + ": " + prediction[i].probability.toFixed(2);
-                labelContainer.childNodes[i].innerHTML = classPrediction;
+                const prob = prediction[i].probability;
+                const pct = Math.round(prob * 100);
+                
+                // Update the visual width and text of the bars
+                document.getElementById(`fill-${i}`).style.width = pct + "%";
+                document.getElementById(`pct-${i}`).innerText = pct + "%";
 
-                if (prediction[i].probability > highestProb) {
-                    highestProb = prediction[i].probability;
+                // Change color if it's the winning class
+                if(prob > 0.8) {
+                    document.getElementById(`fill-${i}`).style.background = "var(--success)";
+                } else {
+                    document.getElementById(`fill-${i}`).style.background = "var(--accent)";
+                }
+
+                if (prob > highestProb) {
+                    highestProb = prob;
                     bestClass = prediction[i].className;
                 }
             }
 
-            // 2. Control the Voice and Light based on the best match
-            const light = document.getElementById("status-light");
             const mainResult = document.getElementById("main-result");
 
-            // Only trigger if confidence is over 90%
+            // Logic to speak and display text
             if (highestProb > 0.90 && bestClass !== "Background") {
                 mainResult.innerHTML = bestClass;
-                light.classList.add("active-light"); // Turn on the green light
+                mainResult.style.color = "var(--success)";
 
-                // If it is Namaste (or any other sign), and we haven't spoken it yet
                 if (bestClass !== lastSpoken) {
                     speak(bestClass);
-                    lastSpoken = bestClass; // Lock it so it doesn't repeat
+                    lastSpoken = bestClass; 
                 }
-            } 
-            // Reset when nothing is happening (Background class)
-            else if (bestClass === "Background" || highestProb < 0.60) {
-                mainResult.innerHTML = "Waiting for sign...";
-                light.classList.remove("active-light"); // Turn off the light
-                lastSpoken = ""; // Reset the lock so you can do Namaste again!
+            } else {
+                mainResult.innerHTML = "Waiting...";
+                mainResult.style.color = "var(--text-muted)";
+                
+                // Reset last spoken if we return to background/uncertainty
+                if(bestClass === "Background" || highestProb < 0.60) {
+                    lastSpoken = ""; 
+                }
             }
         }
 
-        // 3. The Speech Synthesis Function
         function speak(text) {
             const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'hi-IN'; // Uses Indian/Hindi accent
+            utterance.lang = 'hi-IN'; 
+            utterance.rate = 1.1; // Slightly faster for natural feel
             window.speechSynthesis.speak(utterance);
         }
     </script>
