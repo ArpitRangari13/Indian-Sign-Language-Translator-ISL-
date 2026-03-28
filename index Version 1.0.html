@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#080e1f" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Swar — ISL Voice Assistant</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ─── Tokens ─────────────────────────────────────────────────────── */
+    :root {
+      --c-bg:        #080e1f;
+      --c-s1:        rgba(255,255,255,0.042);
+      --c-s2:        rgba(255,255,255,0.065);
+      --c-border:    rgba(255,255,255,0.085);
+      --c-border-hi: rgba(255,255,255,0.15);
+      --c-accent:    #4f8ef7;
+      --c-accent2:   #7c6af7;
+      --c-green:     #34d399;
+      --c-red:       #f87171;
+      --c-amber:     #fbbf24;
+      --c-text:      #dce8ff;
+      --c-muted:     rgba(220,232,255,0.42);
+      --c-dim:       rgba(220,232,255,0.22);
+      --r-sm:  10px;
+      --r-md:  16px;
+      --r-lg:  22px;
+      --r-xl:  28px;
+      --ff:    'Outfit', sans-serif;
+      --ffm:   'JetBrains Mono', monospace;
+      --blur:  blur(22px) saturate(180%);
+      --sh:    0 12px 48px rgba(0,0,0,0.55);
+    }
+
+    /* ─── Base ───────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; -webkit-text-size-adjust: 100%; }
+    body {
+      font-family: var(--ff);
+      background: var(--c-bg);
+      color: var(--c-text);
+      min-height: 100vh;
+      min-height: 100dvh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ─── Background ─────────────────────────────────────────────────── */
+    .bg {
+      position: fixed; inset: 0;
+      z-index: 0; pointer-events: none; overflow: hidden;
+    }
+    .bg::before {
+      content: '';
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 80% 70% at 10%  5%,  rgba(24,52,130,0.60) 0%, transparent 65%),
+        radial-gradient(ellipse 60% 60% at 90% 90%,  rgba(80,30,140,0.45) 0%, transparent 65%),
+        radial-gradient(ellipse 50% 50% at 55% 45%,  rgba(10,18,52,0.70)  0%, transparent 70%);
+    }
+    .bg::after {
+      content: '';
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 20%, transparent 80%);
+    }
+
+    /* ─── App ────────────────────────────────────────────────────────── */
+    .app {
+      position: relative; z-index: 1;
+      display: flex; flex-direction: column;
+      min-height: 100vh; min-height: 100dvh;
+    }
+
+    /* ─── Navbar ─────────────────────────────────────────────────────── */
+    .navbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--c-border);
+      background: rgba(8,14,31,0.80);
+      backdrop-filter: var(--blur);
+      -webkit-backdrop-filter: var(--blur);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .nav-brand { display: flex; align-items: center; gap: 10px; }
+    .nav-logo {
+      width: 34px; height: 34px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #3b6ef0, #7c6af7);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.05rem;
+      box-shadow: 0 4px 14px rgba(79,142,247,0.35);
+      flex-shrink: 0;
+    }
+    .nav-name { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; }
+    .nav-name span { font-weight: 300; color: var(--c-muted); }
+
+    .nav-pill {
+      display: flex; align-items: center; gap: 7px;
+      padding: 6px 13px;
+      border-radius: 100px;
+      border: 1px solid var(--c-border);
+      background: var(--c-s1);
+      font-size: 0.72rem; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--c-muted);
+      transition: all 0.3s;
+    }
+    .nav-pill.live {
+      border-color: rgba(52,211,153,0.30);
+      color: var(--c-green);
+      background: rgba(52,211,153,0.07);
+    }
+    .sdot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--c-red); flex-shrink: 0;
+    }
+    .nav-pill.live .sdot {
+      background: var(--c-green);
+      animation: blink 2s ease-in-out infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+    /* ─── Main ───────────────────────────────────────────────────────── */
+    .main {
+      flex: 1;
+      padding: 28px 20px 48px;
+      max-width: 1040px;
+      width: 100%; margin: 0 auto;
+      display: flex; flex-direction: column; gap: 20px;
+    }
+
+    /* ─── Hero Output ────────────────────────────────────────────────── */
+    .hero {
+      border-radius: var(--r-xl);
+      border: 1px solid var(--c-border);
+      background: var(--c-s1);
+      backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+      padding: 26px 22px;
+      display: flex; align-items: center; gap: 18px;
+      min-height: 96px;
+      position: relative; overflow: hidden;
+      transition: border-color 0.4s;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(79,142,247,0.55), transparent);
+      opacity: 0; transition: opacity 0.4s;
+    }
+    .hero.active { border-color: rgba(79,142,247,0.28); }
+    .hero.active::before { opacity: 1; }
+
+    .hero-icon {
+      width: 52px; height: 52px; flex-shrink: 0;
+      border-radius: var(--r-md);
+      background: linear-gradient(135deg, rgba(79,142,247,0.16), rgba(124,106,247,0.10));
+      border: 1px solid rgba(79,142,247,0.18);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem;
+      transition: all 0.3s;
+    }
+    .hero.active .hero-icon {
+      background: linear-gradient(135deg, rgba(79,142,247,0.28), rgba(124,106,247,0.18));
+      border-color: rgba(79,142,247,0.40);
+      box-shadow: 0 0 24px rgba(79,142,247,0.18);
+    }
+
+    .hero-body { flex: 1; min-width: 0; }
+    .hero-lbl {
+      font-size: 0.68rem; font-weight: 600;
+      letter-spacing: 0.10em; text-transform: uppercase;
+      color: var(--c-dim); margin-bottom: 4px;
+    }
+    .hero-word {
+      font-size: clamp(1.45rem, 5vw, 2.2rem);
+      font-weight: 800; letter-spacing: -0.02em; line-height: 1.1;
+      background: linear-gradient(120deg, #dce8ff 0%, #93c5fd 60%, #c4b5fd 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      transition: all 0.22s;
+    }
+    .hero-word.idle {
+      font-size: 0.95rem; font-weight: 400;
+      background: none; -webkit-text-fill-color: var(--c-muted);
+      font-style: italic; letter-spacing: 0;
+    }
+
+    .conf-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      margin-top: 6px;
+      padding: 3px 10px; border-radius: 100px;
+      background: rgba(52,211,153,0.09);
+      border: 1px solid rgba(52,211,153,0.20);
+      font-family: var(--ffm); font-size: 0.66rem; font-weight: 500;
+      color: var(--c-green);
+      opacity: 0; transform: translateY(4px);
+      transition: opacity 0.3s, transform 0.3s;
+    }
+    .conf-pill.show { opacity: 1; transform: translateY(0); }
+
+    .speak-chip {
+      flex-shrink: 0;
+      display: flex; align-items: center; gap: 6px;
+      padding: 7px 13px; border-radius: 100px;
+      background: rgba(79,142,247,0.09);
+      border: 1px solid rgba(79,142,247,0.20);
+      font-size: 0.72rem; font-weight: 600;
+      color: var(--c-accent);
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .speak-chip.show { opacity: 1; }
+
+    /* ─── Stats Row ──────────────────────────────────────────────────── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .stat {
+      border-radius: var(--r-md);
+      border: 1px solid var(--c-border);
+      background: var(--c-s2);
+      padding: 14px 14px 12px;
+    }
+    .stat-lbl {
+      font-size: 0.63rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.09em;
+      color: var(--c-dim); margin-bottom: 5px;
+    }
+    .stat-val {
+      font-family: var(--ffm);
+      font-size: 1.08rem; font-weight: 600; line-height: 1;
+      color: var(--c-text);
+    }
+    .stat-val.g { color: var(--c-green); }
+    .stat-val.a { color: var(--c-amber); }
+
+    /* ─── Grid ───────────────────────────────────────────────────────── */
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+
+    /* ─── Card ───────────────────────────────────────────────────────── */
+    .card {
+      border-radius: var(--r-xl);
+      border: 1px solid var(--c-border);
+      background: var(--c-s1);
+      backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+      box-shadow: var(--sh);
+      overflow: hidden;
+    }
+    .card-hd {
+      padding: 15px 20px 14px;
+      border-bottom: 1px solid var(--c-border);
+      display: flex; align-items: center; gap: 9px;
+    }
+    .card-ico {
+      width: 22px; height: 22px; border-radius: 6px;
+      background: var(--c-s2); border: 1px solid var(--c-border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.72rem;
+    }
+    .card-ttl {
+      font-size: 0.76rem; font-weight: 600;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--c-muted);
+    }
+    .card-bd { padding: 20px; }
+
+    /* ─── Viewport ───────────────────────────────────────────────────── */
+    .vport {
+      width: 100%; aspect-ratio: 1/1;
+      border-radius: var(--r-lg);
+      background: rgba(0,0,0,0.40);
+      border: 1px solid var(--c-border);
+      overflow: hidden; position: relative;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .vport canvas, .vport video {
+      width: 100% !important; height: 100% !important;
+      object-fit: cover; display: block;
+    }
+    /* Corner bracket decorations */
+    .vport::before, .vport::after,
+    .vp-corners::before, .vp-corners::after {
+      content: '';
+      position: absolute;
+      width: 18px; height: 18px;
+      border-color: rgba(79,142,247,0.5);
+      border-style: solid;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.4s;
+    }
+    .vport::before  { top:8px;    left:8px;  border-width:2px 0 0 2px; border-radius:4px 0 0 0; }
+    .vport::after   { top:8px;    right:8px; border-width:2px 2px 0 0; border-radius:0 4px 0 0; }
+    .vp-corners::before { bottom:8px; left:8px;  border-width:0 0 2px 2px; border-radius:0 0 0 4px; }
+    .vp-corners::after  { bottom:8px; right:8px; border-width:0 2px 2px 0; border-radius:0 0 4px 0; }
+    .vport.live::before, .vport.live::after,
+    .vport.live .vp-corners::before, .vport.live .vp-corners::after { opacity:1; }
+    .scanlines {
+      position:absolute; inset:0; pointer-events:none; display:none;
+      background: repeating-linear-gradient(
+        to bottom, transparent 0px, transparent 3px,
+        rgba(0,0,0,0.04) 3px, rgba(0,0,0,0.04) 4px
+      );
+    }
+    .vport.live .scanlines { display:block; }
+
+    .cam-ph {
+      display:flex; flex-direction:column; align-items:center;
+      gap:12px; padding:24px; text-align:center;
+    }
+    .cam-ph-ico {
+      width:56px; height:56px; border-radius:var(--r-md);
+      border: 1px dashed rgba(255,255,255,0.14);
+      display:flex; align-items:center; justify-content:center;
+      font-size:1.4rem; color:var(--c-dim);
+    }
+    .cam-ph p { font-size:0.82rem; color:var(--c-muted); line-height:1.55; }
+    .cam-ph strong { color:var(--c-text); font-weight:600; }
+
+    /* ─── Button ─────────────────────────────────────────────────────── */
+    .btn {
+      width: 100%; margin-top: 16px;
+      padding: 13px 20px; border-radius: var(--r-lg);
+      border: 1px solid rgba(79,142,247,0.35);
+      background: linear-gradient(135deg, rgba(59,110,240,0.22), rgba(124,106,247,0.15));
+      color: var(--c-text);
+      font-family: var(--ff); font-size: 0.92rem; font-weight: 700;
+      letter-spacing: 0.02em; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 9px;
+      transition: all 0.22s cubic-bezier(0.34,1.56,0.64,1);
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation; user-select: none;
+    }
+    .btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      border-color: rgba(79,142,247,0.65);
+      box-shadow: 0 6px 28px rgba(79,142,247,0.22), 0 0 0 1px rgba(79,142,247,0.10);
+      background: linear-gradient(135deg, rgba(59,110,240,0.35), rgba(124,106,247,0.25));
+    }
+    .btn:active:not(:disabled) { transform: scale(0.97); transition-duration:0.08s; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn.stop {
+      border-color: rgba(248,113,113,0.30);
+      background: linear-gradient(135deg, rgba(220,50,50,0.10), rgba(200,40,60,0.07));
+      color: var(--c-red);
+    }
+    .btn.stop:hover:not(:disabled) {
+      border-color: rgba(248,113,113,0.60);
+      box-shadow: 0 6px 28px rgba(248,113,113,0.14);
+    }
+
+    /* ─── Bars ───────────────────────────────────────────────────────── */
+    .bars { display: flex; flex-direction: column; gap: 11px; }
+    .bar-row { display: flex; flex-direction: column; gap: 5px; }
+    .bar-meta {
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .bar-name {
+      font-size: 0.79rem; font-weight: 500;
+      color: var(--c-text); opacity: 0.78;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      max-width: 66%;
+    }
+    .bar-pct { font-family: var(--ffm); font-size: 0.67rem; color: var(--c-muted); }
+    .bar-track {
+      height: 5px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 100px; overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%; border-radius: 100px; width: 0%;
+      background: linear-gradient(90deg, #3b6ef0, #7c6af7);
+      transition: width 0.16s ease-out, background 0.3s;
+      will-change: width;
+    }
+    .bar-fill.hi {
+      background: linear-gradient(90deg, #059669, #34d399);
+      box-shadow: 0 0 8px rgba(52,211,153,0.38);
+    }
+    .bars-empty { font-size:0.82rem; color:var(--c-dim); font-style:italic; }
+
+    /* ─── Info Banner ────────────────────────────────────────────────── */
+    .info-banner {
+      display: flex; align-items: flex-start; gap: 11px;
+      border-radius: var(--r-lg);
+      border: 1px solid rgba(251,191,36,0.16);
+      background: rgba(251,191,36,0.05);
+      padding: 13px 16px;
+      font-size: 0.78rem; color: rgba(251,191,36,0.80);
+      line-height: 1.52;
+    }
+    .info-banner .ii { font-size: 1rem; margin-top: 1px; flex-shrink: 0; }
+    .info-banner code {
+      font-family: var(--ffm); font-size: 0.72rem;
+      background: rgba(251,191,36,0.12); padding: 1px 5px; border-radius: 4px;
+    }
+
+    /* ─── Footer ─────────────────────────────────────────────────────── */
+    footer {
+      text-align: center;
+      padding: 0 20px max(32px, env(safe-area-inset-bottom, 32px));
+      font-size: 0.71rem; color: var(--c-dim); line-height: 1.6;
+    }
+    footer a { color: rgba(79,142,247,0.65); text-decoration: none; }
+
+    /* ─── Toast ──────────────────────────────────────────────────────── */
+    .toast {
+      position: fixed;
+      bottom: max(28px, env(safe-area-inset-bottom, 28px));
+      left: 50%;
+      transform: translateX(-50%) translateY(16px);
+      background: rgba(8,14,31,0.92);
+      border: 1px solid rgba(52,211,153,0.28);
+      backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+      border-radius: 100px;
+      padding: 9px 20px;
+      font-size: 0.82rem; font-weight: 600;
+      color: var(--c-green);
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.26s, transform 0.26s cubic-bezier(0.34,1.4,0.64,1);
+      z-index: 999;
+      white-space: nowrap;
+      max-width: calc(100vw - 40px);
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+    /* ─── Spinner ────────────────────────────────────────────────────── */
+    .spin {
+      width:16px; height:16px;
+      border:2px solid rgba(255,255,255,0.15);
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: sp 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes sp { to { transform: rotate(360deg); } }
+
+    /* ─── Entrance animations ────────────────────────────────────────── */
+    @keyframes fu { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
+    .a1{animation:fu 0.5s ease both 0.05s}
+    .a2{animation:fu 0.5s ease both 0.14s}
+    .a3{animation:fu 0.5s ease both 0.23s}
+    .a4{animation:fu 0.5s ease both 0.30s}
+
+    /* ─── Mobile ─────────────────────────────────────────────────────── */
+    @media (max-width: 480px) {
+      .navbar  { padding: 12px 16px; }
+      .main    { padding: 18px 14px 36px; gap: 15px; }
+      .hero    { padding: 18px 16px; gap: 14px; }
+      .hero-icon { width: 44px; height: 44px; font-size: 1.2rem; }
+      .card-bd { padding: 15px; }
+      .stats-row { gap: 8px; }
+      .stat    { padding: 11px 10px; }
+      .stat-val { font-size: 0.95rem; }
+      .btn     { padding: 12px 18px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="bg"></div>
+
+  <div class="app">
+
+    <!-- Navbar -->
+    <nav class="navbar">
+      <div class="nav-brand">
+        <div class="nav-logo">🤟</div>
+        <div class="nav-name">Swar <span>/ ISL Assistant</span></div>
+      </div>
+      <div class="nav-pill" id="navPill">
+        <div class="sdot" id="sdot"></div>
+        <span id="stext">Standby</span>
+      </div>
+    </nav>
+
+    <main class="main">
+
+      <!-- Hero -->
+      <div class="hero a1" id="hero">
+        <div class="hero-icon" id="hIcon">🤟</div>
+        <div class="hero-body">
+          <div class="hero-lbl">Detected Sign</div>
+          <div class="hero-word idle" id="hWord">Waiting for sign…</div>
+          <div class="conf-pill" id="confPill">
+            ● <span id="confVal">0.0%</span> confidence
+          </div>
+        </div>
+        <div class="speak-chip" id="speakChip">🔊 Speaking</div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-row a2">
+        <div class="stat">
+          <div class="stat-lbl">Signs Read</div>
+          <div class="stat-val" id="sCnt">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-lbl">Confidence</div>
+          <div class="stat-val g" id="sConf">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-lbl">Threshold</div>
+          <div class="stat-val a">90%</div>
+        </div>
+      </div>
+
+      <!-- Grid -->
+      <div class="grid a3">
+
+        <!-- Camera Card -->
+        <div class="card">
+          <div class="card-hd">
+            <div class="card-ico">📷</div>
+            <span class="card-ttl">Camera Feed</span>
+          </div>
+          <div class="card-bd">
+            <div class="vport" id="vport">
+              <div class="vp-corners" id="vpc" style="position:absolute;inset:0;pointer-events:none;"></div>
+              <div class="scanlines"></div>
+              <div class="cam-ph" id="camPh">
+                <div class="cam-ph-ico">📷</div>
+                <p>Camera feed appears here.<br/><strong>Tap "Start"</strong> to begin.</p>
+              </div>
+            </div>
+            <button class="btn" id="startBtn" onclick="startApp()">
+              <span id="bIcon">▶</span>
+              <span id="bLabel">Start Translator</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Analytics Card -->
+        <div class="card">
+          <div class="card-hd">
+            <div class="card-ico">📊</div>
+            <span class="card-ttl">Class Probabilities</span>
+          </div>
+          <div class="card-bd">
+            <div class="bars" id="bars">
+              <p class="bars-empty">Start the translator to see live predictions.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Info -->
+      <div class="info-banner a4">
+        <span class="ii">⚡</span>
+        <span>All inference runs <strong>on-device</strong> via TensorFlow.js — your camera never leaves your browser.
+        Requires a local web server and the <code>./my_model/</code> folder containing
+        <code>model.json</code>, <code>metadata.json</code>, and <code>weights.bin</code>.</span>
+      </div>
+
+    </main>
+
+    <footer>
+      Powered by TensorFlow.js · Teachable Machine · Web Speech API &nbsp;·&nbsp;
+      <a href="https://teachablemachine.withgoogle.com/" target="_blank">Train your model ↗</a>
+    </footer>
+
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    /* ═══════════════════════════════════════════════════════════════
+       SWAR — ISL Voice Assistant
+       Place model files in: ./my_model/model.json, metadata.json, weights.bin
+    ═══════════════════════════════════════════════════════════════ */
+    const MODEL_URL = "C:\Indian Sign Language Translator (ISL)\my_model";
+    const THRESHOLD = 0.90;
+    const BG_CLASS  = "Background";
+
+    let model, webcam;
+    let lastSpoken = "";
+    let signsCount = 0;
+    let isRunning  = false;
+    let speakTimer = null;
+    let toastTimer = null;
+
+    /* DOM */
+    const navPill   = document.getElementById("navPill");
+    const stext     = document.getElementById("stext");
+    const hero      = document.getElementById("hero");
+    const hIcon     = document.getElementById("hIcon");
+    const hWord     = document.getElementById("hWord");
+    const confPill  = document.getElementById("confPill");
+    const confVal   = document.getElementById("confVal");
+    const speakChip = document.getElementById("speakChip");
+    const bars      = document.getElementById("bars");
+    const vport     = document.getElementById("vport");
+    const camPh     = document.getElementById("camPh");
+    const startBtn  = document.getElementById("startBtn");
+    const bIcon     = document.getElementById("bIcon");
+    const bLabel    = document.getElementById("bLabel");
+    const sCnt      = document.getElementById("sCnt");
+    const sConf     = document.getElementById("sConf");
+    const toast     = document.getElementById("toast");
+
+    /* ── Start ── */
+    async function startApp() {
+      if (isRunning) return;
+      isRunning = true;
+      startBtn.disabled = true;
+      bIcon.innerHTML = '<span class="spin"></span>';
+      bLabel.textContent = "Loading model…";
+
+      try {
+        model = await tmImage.load(MODEL_URL + "model.json", MODEL_URL + "metadata.json");
+
+        webcam = new tmImage.Webcam(400, 400, true); /* flip for selfie */
+        await webcam.setup();
+        await webcam.play();
+
+        /* Mount canvas */
+        camPh.style.display = "none";
+        vport.appendChild(webcam.canvas);
+        vport.classList.add("live");
+
+        buildBars();
+
+        navPill.classList.add("live");
+        stext.textContent = "Live";
+
+        startBtn.disabled = false;
+        startBtn.classList.add("stop");
+        bIcon.textContent = "■";
+        bLabel.textContent = "Stop Translator";
+        startBtn.onclick = stopApp;
+
+        requestAnimationFrame(loop);
+
+      } catch (err) {
+        isRunning = false;
+        startBtn.disabled = false;
+        bIcon.textContent = "▶";
+        bLabel.textContent = "Start Translator";
+        startBtn.onclick = startApp;
+        showToast("⚠️ Model load failed — check console.");
+        console.error("Swar:", err);
+      }
+    }
+
+    /* ── Stop ── */
+    function stopApp() {
+      if (!isRunning) return;
+      isRunning = false;
+      try { webcam.stop(); } catch(_){}
+      vport.querySelectorAll("canvas").forEach(c => c.remove());
+      vport.classList.remove("live");
+      camPh.style.display = "";
+      navPill.classList.remove("live");
+      stext.textContent = "Standby";
+      startBtn.classList.remove("stop");
+      bIcon.textContent = "▶";
+      bLabel.textContent = "Start Translator";
+      startBtn.onclick = startApp;
+      bars.innerHTML = '<p class="bars-empty">Start the translator to see live predictions.</p>';
+      setIdle();
+    }
+
+    /* ── Build bars ── */
+    function buildBars() {
+      bars.innerHTML = "";
+      model.getClassLabels().forEach((cls, i) => {
+        const row = document.createElement("div");
+        row.className = "bar-row";
+        row.innerHTML = `
+          <div class="bar-meta">
+            <span class="bar-name" title="${cls}">${cls}</span>
+            <span class="bar-pct" id="bp${i}">0.0%</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill" id="bf${i}"></div></div>`;
+        bars.appendChild(row);
+      });
+    }
+
+    /* ── Loop ── */
+    async function loop() {
+      if (!isRunning) return;
+      webcam.update();
+      await predict();
+      requestAnimationFrame(loop);
+    }
+
+    async function predict() {
+      const preds = await model.predict(webcam.canvas);
+
+      /* Find top class */
+      let topIdx = 0, topProb = 0;
+      preds.forEach((p, i) => { if (p.probability > topProb) { topProb = p.probability; topIdx = i; } });
+      const topClass = preds[topIdx].className;
+      const pct = (topProb * 100).toFixed(1);
+
+      /* Update bars */
+      preds.forEach((p, i) => {
+        const w = (p.probability * 100).toFixed(1);
+        const bf = document.getElementById(`bf${i}`);
+        const bp = document.getElementById(`bp${i}`);
+        if (!bf) return;
+        bf.style.width = w + "%";
+        bp.textContent = w + "%";
+        bf.classList.toggle("hi", p.probability > THRESHOLD);
+      });
+
+      sConf.textContent = pct + "%";
+
+      /* Background / below threshold */
+      if (topClass === BG_CLASS || topProb <= THRESHOLD) {
+        if (topClass === BG_CLASS) lastSpoken = "";
+        setIdle();
+        return;
+      }
+
+      /* Valid sign */
+      setActive(topClass, pct);
+      if (topClass !== lastSpoken) {
+        lastSpoken = topClass;
+        signsCount++;
+        sCnt.textContent = signsCount;
+        speak(topClass);
+        flashSpeakChip();
+        showToast("🔊 " + topClass);
+      }
+    }
+
+    /* ── UI states ── */
+    function setIdle() {
+      hero.classList.remove("active");
+      hIcon.textContent  = "🤟";
+      hWord.textContent  = "Waiting for sign…";
+      hWord.className    = "hero-word idle";
+      confPill.classList.remove("show");
+      speakChip.classList.remove("show");
+    }
+
+    function setActive(word, pct) {
+      hero.classList.add("active");
+      hIcon.textContent = "✋";
+      hWord.textContent = word;
+      hWord.className   = "hero-word";
+      confVal.textContent = pct + "%";
+      confPill.classList.add("show");
+    }
+
+    function flashSpeakChip() {
+      speakChip.classList.add("show");
+      clearTimeout(speakTimer);
+      speakTimer = setTimeout(() => speakChip.classList.remove("show"), 1800);
+    }
+
+    /* ── Speech ── */
+    function speak(text) {
+      if (!window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+      const u  = new SpeechSynthesisUtterance(text);
+      u.lang   = "hi-IN";
+      u.rate   = 0.90;
+      u.pitch  = 1.05;
+      u.volume = 1;
+      window.speechSynthesis.speak(u);
+    }
+
+    /* ── Toast ── */
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove("show"), 2600);
+    }
+  </script>
+</body>
+</html>
