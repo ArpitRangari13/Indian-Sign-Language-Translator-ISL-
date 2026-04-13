@@ -31,3 +31,5 @@ Swar_SIH_Project/
     ├── model.json         # Neural network architecture
     ├── metadata.json      # Class labels (e.g., "Namaste", "Background")
     └── weights.bin        # Trained AI weights
+
+More Comming Soon .......................
